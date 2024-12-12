@@ -1,4 +1,4 @@
-# Student-Academic-Performance-Analysis
+# An Analysis of Factors Affecting Students’ Academic Performance
 *Kaushika Uppu*
 
 Exams are a fundamental concept of the educational process in nearly all levels of education, from elementary school to postgraduate studies. Within this framework, numerous factors have the potential to influence student performance, especially in higher education (high school-postgraduate), where students might be facing different situations and stressors. While there are a multitude of potential factors, most can be categorized as being academic, personal, family, or lifestyle.
