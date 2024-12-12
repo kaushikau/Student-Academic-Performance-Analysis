@@ -1,0 +1,681 @@
+---
+title: "An Analysis of Factors Affecting Students' Academic Performance"
+author: "Kaushika Uppu"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: spacelab
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+Exams are a fundamental concept of the educational process in nearly all levels of education, from elementary school to postgraduate studies. Within this framework, numerous factors have the potential to influence student performance, especially in higher education (high school-postgraduate), where students might be facing different situations and stressors. While there are a multitude of potential factors, most can be categorized as being academic, personal, family, or lifestyle (Yahya et al., 2016)^[4].
+
+This dataset encompasses a wide array of variables that might play a role in student exam performance, including those related to academics, family situations, and self-motivation, as well as the response variable—exam score— spanning from high school to post-graduate students. The motivation behind selecting this dataset stems from a curiosity to understand the determinants that could affect students' academic performance, particularly with regard to their exam outcomes. The central research question that will be addressed in this study is: What are the key factors that influence a student's performance on exams, and what is the extent of their impact on exam scores?
+
+Many researchers have dived into this topic previously. Using machine learning, Beckham et al. (2023) found that two major factors that impact student performance are mother's education with a positive effect and past failures with a negative effect^[1]. Another study found variables that leaned more towards demographic features of a student, such as ethnicity, gender, and parent educational level (Doğanlı & Çelik, 2021)^[2]. A study that used feature selection narrowed down 45 attributes to identify ones that contributed the most to academic performance, including extracurricular activities, guidance, travel time, and learning disabilities (Kaviyarasi & Balasubramanian, 2018)^[3]. Related work, in conclusion, highlight numerous factors in a number of different categories that hold significant weight in a student's academic success.
+
+Addressing this question holds value in multiple contexts, the majority of which lie in the realm of aiding students who might need support. By understanding the determinants that consistently affect student performance, educators, policymakers, and academic institutions can tailor their support systems and policies to better assist students, especially those that face disadvantages due to their personal, familial, or environmental circumstances. This analysis could therefore aid in improving educational outcomes as a whole and ensure more equitable academic support for all types of students.
+
+
+## Data
+#### Package Imports
+```{r message = FALSE}
+library(tidyverse)
+library(reshape2)
+library(FactoMineR)
+library(factoextra)
+library(caret)
+library(Metrics)
+library(ggplot2)
+library(broom)
+library(DT)
+```
+
+### Data Source
+This dataset is from Kaggle, and is called Student Performance Factors.
+
+Citation: Practice Data Analysis With Me. (2024, September 2). Student Performance Factors. Kaggle. https://www.kaggle.com/datasets/lainguyn123/student-performance-factors/data
+
+### Data Collection
+This is a synthetic data set that was created for analytical purposes, so the data was not collected from actual students. Instead, it was created to be used to simulate a realistic overview of student exam performance.
+
+### Cases
+```{r}
+student_data_original = read.csv("StudentPerformanceFactors.csv")
+datatable(student_data_original, options = list(scrollX = TRUE, searching = FALSE), caption = "Table 1. Overview of the original student dataset.")
+```
+
+The cases, or units of observations/rows in this dataset are students, where each row represents a different student in the data set. 
+
+```{r}
+nrow(student_data_original)
+```
+
+As seen above, there are a total of 6,607 students in this data set.
+
+### Variables
+```{r}
+ncol(student_data_original)
+```
+
+As shown above, there are 20 total variables in this data set. Taking a look at their names:
+
+```{r}
+colnames(student_data_original)
+```
+
+Based on the names of the variables, there are a combination of numerical and categorical variables in this dataset.
+
+```{r}
+colnames((student_data_original[,sapply(student_data_original,is.numeric)]))
+```
+
+7 of the 20 variables are numerical, while the rest are categorical.
+
+Here are the descriptions of all the variables:
+
+- **Hours_Studied:** Number of hours spent studying per week
+
+- **Attendance:** Percentage of classes attended
+
+- **Parental_Involvement:** Level of parents' involvement in student's education (low, medium, high)
+
+- **Access_to_Resources:** Availability of educational resources (low, medium, high)
+
+- **Extracurricular_Activities:** Participation in extracurricular activities (yes, no)
+
+- **Sleep_Hours:** Average number of hours of sleep per night
+
+- **Previous_Scores:** Scores from previous exams
+
+- **Motivation_Level:** Student's level of motivation (low, medium, high)
+
+- **Internet_Access:** Availability of internet access (yes, no)
+
+- **Tutoring_Sessions:** Number of tutoring sessions attended per month
+
+- **Family_Income:** Family income level (low, medium, high)
+
+- **Teacher_Quality:** Quality of the teachers (low, medium, high)
+
+- **School_Type:** Type of school attended (public, private)
+
+- **Peer_Influence:** Influence of peers on academic performance (positive, neutral, negative)
+
+- **Physical_Activity:** Average number of hours of physical activity per week
+
+- **Learning_Disabilities:** Presence of learning disabilities (yes, no)
+
+- **Parental_Education_Level:** Highest education level of parents (high school, college, postgraduate)
+
+- **Distance_from_Home:** Distance from home to school (near, moderate, far)
+
+- **Gender:** Gender of the student (male, female)
+
+- **Exam_Score:** Final exam score
+
+
+### Type of Study
+As mentioned previously, this data was created synthetically to simulate students and their performance on exams, and therefore this dataset does not represent an observational study or an experiment.
+
+### Data Quality and Cleanup
+First, check if there's any missing data:
+```{r}
+sum(is.na(student_data_original))
+```
+
+Continuing with checking for missing data, empty values, represented by an empty string, were checked next:
+```{r}
+empty_strings <- student_data_original == ""
+empty_rows <- student_data_original[apply(empty_strings, 1, any), ]
+print(dim(empty_rows))
+```
+
+There are 229 rows that contain empty strings in at least one column, so those rows are dropped from the data set.
+
+```{r}
+student_data_original[student_data_original == ""] <- NA
+student_data <- na.omit(student_data_original)
+dim(student_data)
+```
+
+As seen in the new dimensions of `student_data` above, there are now 6,378 rows (or students) in our dataset after dropping missing values. Next, the existence of any duplicated rows was checked.
+
+```{r}
+which(duplicated(student_data))
+```
+
+As seen above, there is no duplicated data in this data set.
+
+Moving on, in the variables section above, seven of the variables are numerical, and are therefore in the correct format. However—as shown below—the categorical ones are not formatted to be factors, which is a formatting issue that needs to be fixed.
+
+```{r}
+colnames((student_data[,sapply(student_data,is.factor)]))
+```
+
+Based on the data card on the Kaggle website for this dataset, `Parental_Involvement`, `Access_to_Resources`, `Extracurricular_Activities`, `Motivation_Level`, `Internet_Access`, `Family_Income`, `Teacher_Quality`, `School_Type`, `Peer_Influence`, `Learning_Disabilities`, `Parental_Education_Level`, `Distance_from_Home`, and `Gender` are all categorical variables that therefore need to be converted into factors. Also, ordinal categorical variables will be converted to ordered factors.
+
+```{r}
+lmh_cols = label_cols = c("Parental_Involvement", "Access_to_Resources", "Motivation_Level", "Family_Income", "Teacher_Quality")
+student_data <- student_data %>% mutate(across(where(is.character), as.factor))
+for (col in lmh_cols) {
+  student_data[[col]] <- trimws(student_data[[col]])
+  student_data[[col]] <- factor(student_data[[col]], levels = c("Low", "Medium", "High"), ordered = TRUE)
+}
+student_data$Peer_Influence <- factor(student_data$Peer_Influence, levels = c("Positive", "Neutral", "Negative"))
+student_data$Parental_Education_Level <- factor(student_data$Parental_Education_Level, levels = c("High School", "College", "Postgraduate"))
+student_data$Distance_from_Home <- factor(student_data$Distance_from_Home, levels = c("Near", "Moderate", "Far"))
+datatable(head(student_data, 5), options = list(scrollX = TRUE, dom = 't'), caption = "Table 2. Head of dataset after factor conversion.")
+```
+
+To double-check if the conversion was applied properly:
+```{r}
+colnames((student_data[,sapply(student_data, is.factor)]))
+```
+
+The categorical variables are now correctly formatted as factors, and the data quality check is now complete.
+
+## Exploratory Data Analysis
+
+### Summary Statistics
+
+First, an overview of the seven major summary statistics for all of the numerical columns was examined to get a glimpse of the distributions of these variables: mean, median, min, max, mode, standard deviation, and variance. Since R doesn't have a built-in mode function, one is created one below.
+```{r}
+mode <- function(x) {
+  freq <- table(x)
+  as.numeric(names(freq)[which.max(freq)])
+}
+```
+
+Another function was created, which will calculate all of these statistics for a given variable.
+```{r}
+summary_stats <- function(data, column) {
+  result <- data |>
+    summarise(
+      mean = mean({{ column }}, na.rm = TRUE),
+      median = median({{ column }}, na.rm = TRUE),
+      min = min({{ column }}, na.rm = TRUE),
+      max = max({{ column }}, na.rm = TRUE),
+      mode = mode({{ column }}),
+      std = sd({{ column }}, na.rm = TRUE),
+      variance = var({{ column }}, na.rm = TRUE)
+    )
+  
+  return(result)
+}
+```
+
+#### Hours Studied
+```{r}
+datatable(summary_stats(student_data, Hours_Studied), rownames = FALSE, options = list(dom = 't'), caption = "Table 3. Hours_Studied summary stats.")
+```
+
+In `Hours_Studied`, taking into account the mean and median of the variable, the max of 44 might be an outlier. That could also be the cause of the high variance for this variable.
+
+#### Attendance
+```{r}
+datatable(summary_stats(student_data, Attendance), rownames = FALSE, options = list(dom = 't'), caption = "Table 4. Attendance summary stats.")
+```
+
+The mean and median of `Attendance` are very close to each other, and are also pretty close to the halfway point between the min and max, revealing that there might not be any extreme outliers for this variable.
+
+#### Sleep Hours
+```{r}
+datatable(summary_stats(student_data, Sleep_Hours), rownames = FALSE, options = list(dom = 't'), caption = "Table 5. Sleep_Hours summary stats.")
+```
+
+The range of `Sleep_Hours` is small, so there doesn't appear to be any outliers in the data here. The mean and median are also very similar, while the median and the mode are the same.
+
+#### Previous Scores
+```{r}
+datatable(summary_stats(student_data, Previous_Scores), rownames = FALSE, options = list(dom = 't'), caption = "Table 6. Previous_Scores summary stats.")
+```
+
+The mean and median for `Previous_Scores` are close to the midway point of the range, so there doesn't seem to be any outliers here. The mode is closer to the minimum, however, which could mean that there are more scores on the lower end than the higher.
+
+#### Tutoring Sessions
+```{r}
+datatable(summary_stats(student_data, Tutoring_Sessions), rownames = FALSE, options = list(dom = 't'), caption = "Table 7. Tutoring_Sessions summary stats.")
+```
+
+Based on the mean, median, and mode of `Tutoring_Sessions`, the maximum of 8 appears to be an outlier.
+
+#### Physical Activity
+```{r}
+datatable(summary_stats(student_data, Physical_Activity), rownames = FALSE, options = list(dom = 't'), caption = "Table 8. Physical_Activity summary stats.")
+```
+
+For `Physical_Acitvity`, the range is once again pretty small, with mean, median, and mode all falling pretty close to the midway point of the range. The standard deviation is also relatively small here, which could imply a normal distribution.
+
+#### Exam Score
+```{r}
+datatable(summary_stats(student_data, Exam_Score), rownames = FALSE, options = list(dom = 't'), caption = "Table 9. Exam_Score summary stats.")
+```
+
+The mean, median, and mode for `Exam_Score` all fall on the lower end of the range, which means that there are likely more scores closer to the minimum than the maximum here. Considering that the standard deviation is also relatively small, most of the scores likely fall in the lower half of the range of exam scores.
+
+### Visualizations
+
+#### Distribution of Exam Scores
+
+The first thing that was visualized is the response variable of the data set: `Exam Scores`, which is shown by a histogram of the scores below.
+
+```{r message = FALSE}
+student_data %>%
+  ggplot(mapping = aes(x=Exam_Score)) + 
+  geom_histogram(fill="steelblue") +
+  labs(title= "Distribution of Exam Scores", x = "Exam Score", y = "Frequency", caption = "Figure 1. Histogram showing distribution of exam scores.") +
+  theme_minimal() +
+  theme(plot.caption = element_text(hjust = 0))
+```
+
+As predicted with the summary stats in the previous section, most of the exam scores are in the lower half of the range, with a peak around 67-68. There are very low numbers of higher scores, and the distribution is roughly normal, which some higher scores on the right side of the graph.
+
+#### Hours Studied vs Exam Score
+
+Then, the relationship between hours studied and exam score was looked at, as those two variables might be related. Below, the average exam scores by hours studied is plotted.
+
+```{r}
+avg_score_study <- student_data %>%
+  group_by(Hours_Studied) %>%
+  summarize(Avg_Exam_Score = mean(Exam_Score))
+
+avg_score_study %>%
+  ggplot(mapping = aes(x = Hours_Studied, y = Avg_Exam_Score)) + 
+  geom_point() + 
+  labs(title = "Average Exam Score by Hours Studied", x = "Hours Studied", y = "Average Exam Score", caption = "Figure 2. Scatter plot of hours studied vs average exam score.") + 
+  theme_minimal() +
+  theme(plot.caption = element_text(hjust = 0))
+```
+
+
+Based on the graph above, there's a pretty clear trend that emerges: as the hours studied increases, so does average exam score. There are a few values that don't follow this pattern, but nearly all of them do. This reveals that hours studied likely does play a role in exam scores.
+
+#### Previous Scores vs Exam Scores
+
+Next, the way in which previous scores seem to impact exam scores was explored, as this might also be one of the variables that has a significant role in scores. Once again, average exam scores was used to view this relationship below.
+
+```{r}
+avg_score_prev <- student_data %>%
+  group_by(Previous_Scores) %>%
+  summarize(Avg_Exam_Score = mean(Exam_Score))
+
+avg_score_prev %>%
+  ggplot(mapping = aes(x = Previous_Scores, y = Avg_Exam_Score)) + 
+  geom_point() + 
+  labs(title = "Average Exam Score by Previous Scores", x = "Previous Scores", y = "Average Exam Score", caption = "Figure 3. Scatter plot of previous scores by average exam score.") + 
+  theme_minimal() +
+  theme(plot.caption = element_text(hjust = 0))
+```
+
+From the graph above, compared to the previous graph, the relationship between previous scores and average exam score is not as strong as the relationship between hours studied and average exam score. However, there is still a pattern that emerges here, where higher previous scores seem to be correlated with higher average exam scores. 
+
+#### Numerical Variables Correlation Heatmap
+
+To get an overview of how all the numerical variables in the dataset correlate with each other, a heatmap was used:
+
+```{r}
+correlation_matrix <- cor(select(student_data, where(is.numeric)), use = "complete.obs")
+correlation_melted <- melt(correlation_matrix)
+
+ggplot(correlation_melted, aes(Var1, Var2, fill = value)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "firebrick4", high = "dodgerblue4", mid = "white", 
+                       midpoint = 0, limit = c(-1, 1), 
+                       name = "Correlation") +
+  labs(title = "Heatmap of Correlations between Numerical Variables", x = "Variables", y = "Variables", caption = "Figure 4. Heatmap of numerical variables correlations.") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), plot.caption = element_text(hjust = 0))
+```
+
+With this heatmap, it's clear that the numerical variables that seem to be the most correlated with exam scores are hours studied, attendance, previous scores, and tutoring sessions, with attendance being the most correlated out of all four variables.
+
+#### Categorical Variables vs Exam Scores
+
+Next, the categorical variables in this data set were examined to get an general idea of how exam scores are distributed within them, visualized by boxplots. 
+```{r fig.width=10, fig.height=15, warning=FALSE}
+categorical_vars <- c("Parental_Involvement", "Access_to_Resources", "Extracurricular_Activities",
+                      "Motivation_Level", "Internet_Access", "Family_Income", 
+                      "Teacher_Quality", "School_Type", "Peer_Influence", 
+                      "Learning_Disabilities", "Parental_Education_Level", 
+                      "Distance_from_Home", "Gender")
+
+student_data_long <- student_data %>%
+  gather(key = "Category", value = "Category_Level", all_of(categorical_vars))
+
+ggplot(student_data_long, aes(x = Category_Level, y = Exam_Score, fill = Category_Level)) +
+  geom_boxplot() +
+  facet_wrap(~ Category, scales = "free_x", ncol=3) +
+  labs(title = "Exam Scores by Categorical Variables", x = "Category Level", y = "Exam Score", caption = "Figure 5. Distributions of exam scores by all categorical variables.") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        strip.text = element_text(size = 10), legend.position="none",
+        plot.caption = element_text(hjust = 0))
+```
+
+Most of the categorical variables don't seem to have a highly significant difference between groups in terms of exam scores, however some do have slight differences in medians. For example, low access to resources has lower median exam scores than medium and high access to resources. In addition, not having learning disabilities seem to result in higher exam scores. Parental involvement also appears to have some effect on exam scores, but further analysis will be needed for all of these variables to test whether the differences are significant.
+
+Based on the exploratory data analysis, there are a couple of variables that stick out as possibly significant factors that affect students' exam scores, including attendance, hours studied, learning disabilities, and parental involvement. Determining whether this factors are actually statistically significant in affecting exam scores will be the focus of the next step: data analysis.
+
+## Data Analysis
+
+### PCA/FAMD
+
+The initial step for this analysis involves reducing the dimensionality of the dataset while preserving as much variance as possible. To achieve this, two methods will be used: Principal Component Analysis (PCA) and Factorial Analysis of Mixed Data (FAMD). Since this dataset contains mixed data (numerical and categorical), PCA will be used for only the numerical variables and FAMD will be used on all of the variables. The outcomes of the two methods will be compared and evaluated at the end.
+
+First, PCA will be conducted on the numerical variables, with the exception of `Exam_Score`, as that is the response variable.
+```{r}
+num_vars <- student_data %>% select_if(is.numeric) %>% select(-Exam_Score)
+num_vars_scaled <- scale(num_vars)
+
+pca_res <- prcomp(num_vars_scaled)
+pca_sum <- summary(pca_res)
+pca_info <- data.frame(
+  `Standard_Deviation` = pca_sum$importance[1, ],
+  `Proportion_of_Variance` = pca_sum$importance[2, ],
+  `Cumulative_Proportion` = pca_sum$importance[3, ]
+)
+datatable(pca_info, options = list(paging = FALSE, searching = FALSE), caption = "Table 10. PCA summary with only numerical variables.")
+```
+
+As seen above, the proportion of variance described by just numerical variables is about the same for all of the principal components. The effect of that is shown on the plot below:
+
+```{r}
+cumsums <- data.frame(
+  x = c(1:6),
+  cum_sum_pca = cumsum((pca_res$sdev ** 2) / sum((pca_res$sdev ** 2)))
+)
+ggplot(cumsums, mapping = aes(x = x, y = cum_sum_pca)) +
+  geom_line() + 
+  geom_point() + 
+  labs(title = "Cumulative Scree Plot for Numerical Variables Only", x = "Principal Component", y = "Comulative Proportion Variance Explained", caption = "Figure 6. Cumulative proportion scree plot from PCA of numerical variables.") +
+  ylim(0,1.01) +
+  scale_x_continuous(breaks = 1:6) +
+  geom_hline(yintercept = 0.85, color = "steelblue", linetype = "dashed") +
+  annotate("text", x = 6, y = 0.85, label = "0.85", hjust = 1, vjust = -0.5, color = "steelblue") +
+  theme_minimal() +
+  theme(plot.caption = element_text(hjust = 0))
+```
+
+The cumulative scree plot above reveals a pretty linear cumulative PVE. The dashed line on the plot is at 0.85 (85% of the variance explained), and this shows that to hit that benchmark, 5 of the principal components calculated by PCA will be needed.
+
+However, since PCA contains just the numerical variables, none of the categorical variables are included here. Next, FAMD will be conducted with both the numerical and categorical variables of this dataset, excluding `Exam_Score` once again.
+
+```{r}
+all_vars <- student_data %>% select(-Exam_Score)
+famd_res <- FAMD(all_vars, ncp = 27, graph = FALSE)
+famd_eig <- as.data.frame(famd_res$eig)
+datatable(famd_eig, options = list(paging = FALSE, searching = FALSE, scrollY = '400px'), caption = "Table 11. FAMD summary with all variables.")
+```
+
+As seen above, the percentage of variance is similar to what it was like for just the numerical variables, with all components having close to the same percentage. Although it is clear that a large amount of principal components will be needed to reach the benchmark of 85% of variance explained, the plot below makes it even more obvious (percentages were converted to proportions to match the previous plot): 
+
+```{r}
+cumsums_famd <- data.frame(
+  x = c(1:27),
+  cum_sum_famd = as.vector(famd_res$eig[, 3] / 100)
+)
+ggplot(cumsums_famd, mapping = aes(x = x, y = cum_sum_famd)) +
+  geom_line() + 
+  geom_point() + 
+  labs(title = "Cumulative Scree Plot for All Variables", x = "Principal Component", y = "Comulative Proportion Variance Explained", caption = "Figure 7. Cumulative proportion scree plot from FAMD of all variables.") +
+  ylim(0,1.01) +
+  scale_x_continuous(breaks = 1:27) +
+  geom_hline(yintercept = 0.85, color = "steelblue", linetype = "dashed") +
+  annotate("text", x = 27, y = 0.85, label = "0.85", hjust = 1, vjust = -0.5, color = "steelblue") +
+  theme_minimal() +
+  theme(plot.caption = element_text(hjust = 0))
+```
+
+Based on the plot above, 23 principal components would be needed to capture 85% of the variance in this dataset. This is a fairly high number, since there are only 19 explanatory variables in the dataset. However, using these 23 principal components, the most important features for `Exam_Score` can be extracted using the FAMD loadings, which are how much each original variable contributes to a certain principal component. First, looking at the correlations between the principal components and `Exam_Score` shows which principal components are important for the response variable.
+
+```{r}
+famd_all <- as.data.frame(famd_res$ind$coord)
+famd_all$Exam_Score <- student_data$Exam_Score
+corrs <- as.data.frame(cor(famd_all[, 1:23], famd_all$Exam_Score))
+datatable(corrs, colnames = c("Dimension", "Correlation"), options = list(paging = FALSE, searching = FALSE, scrollY = '400px'), caption = "Table 12. Correlations between principal components from FAMD and Exam_Score.")
+```
+
+The table above reveals that the five principal components most important for `Exam_Score` are 1, 10, 15, 17, and 23. Next, using the loadings for those 5 principal components, the specific variables that contribute the most (both positive and negative) to those important components can be identified.
+
+```{r}
+options(scipen = 999)
+famd_cont <- as.data.frame(famd_res$var$contrib[, c("Dim.1", "Dim.10", "Dim.15", "Dim.17", "Dim.23")])
+datatable(famd_cont, options = list(paging = FALSE, searching = FALSE, scrollY = '400px', scrollX = TRUE), caption = "Table 13. Loadings of top 5 principal components for the explanatory variables.")
+```
+
+Looking across all five components, the variables that seem to have the most importance for `Exam_Score` are: `Hours_Studied`, `Attendance`, `Sleep_Hours`, `Parental_Involement`, `Access_to_Resources`, `Distance_from_Home`, `Parental_Education_Level`, `Family_Income`, `Motivation_Level`, `School_Type`, `Peer_Influence`, and `Learning_Disabilities`. These 12 variables can now be used in the next step: a linear regression model.
+
+### Linear Regression
+
+#### Applicability
+
+Now that the variables have been narrowed down slightly, linear regression can be carried. This method is applicable for this data because the response variable of this dataset is a continuous numerical variable, `Exam_Score`. Furthermore, the explanatory variables are all numerical variables or categorical variables that have been properly encoded into numerical variables (done below).
+
+```{r}
+vars_subset <- all_vars[c("Hours_Studied", "Attendance", "Sleep_Hours", "Parental_Involvement", "Access_to_Resources", "Motivation_Level", "Family_Income", "School_Type", "Peer_Influence", "Learning_Disabilities", "Parental_Education_Level", "Distance_from_Home")]
+
+label_cols = c("Parental_Involvement", "Access_to_Resources", "Motivation_Level", "Family_Income","Parental_Education_Level", "Distance_from_Home")
+bin_cols = c("Learning_Disabilities")
+onehot_cols = c("School_Type", "Peer_Influence")
+vars_subset_enc <- vars_subset %>%
+  mutate(across(all_of(label_cols), ~ factor(., ordered = TRUE))) %>%
+  mutate(across(all_of(label_cols), ~ as.integer(.), .names = "{.col}"))
+vars_subset_enc <- vars_subset_enc %>%
+  mutate(Learning_Disabilities = ifelse(Learning_Disabilities == "Yes", 1, 
+                                        ifelse(Learning_Disabilities == "No", 0, 0)))
+vars_subset_enc <- vars_subset_enc %>%
+  mutate(across(all_of(onehot_cols), ~ as.numeric(as.factor(.)) - 1))
+datatable(head(vars_subset_enc, 5), options = list(scrollX = TRUE, dom = 't'), caption = "Table 14. Head of dataset after categorical variable encoding.")
+```
+
+In addition, roughly linear relationships exist between the response variable and the explanatory variables, shown with the correlation matrix below (some variables have stronger linear relationships than others):
+
+```{r}
+corr_all <- as.data.frame(cor(cbind(vars_subset_enc, student_data$Exam_Score)))
+datatable(corr_all, options = list(scrollX = TRUE, paging = FALSE, searching = FALSE, scrollY = '400px'), caption = "Table 15. Correlation matrix of 12 explanatory variables and the response variable.")
+```
+
+#### Formulation
+
+For the formulation of the linear regression model, the regression equation will be of the form:
+
+$$
+Exam\_Score = \beta_0 + \beta_1X_1 + \beta_2X_2 ... + \beta_kX_k + \epsilon
+$$
+
+Where
+
+- $X_1, X_2,...X_k$ are the selected variables from above
+- $\beta_0$ is the intercept
+- $\beta_1, \beta_2,...\beta_k$ are the estimated coefficients
+- $\epsilon$ is the error term
+
+Carrying out the linear regression:
+
+```{r}
+target_var <- student_data$Exam_Score
+model <- lm(target_var ~ ., data = vars_subset_enc)
+```
+
+Before interpreting the results of the model, assumptions need to be checked first.
+
+#### Assumptions Checks
+
+First, the residuals should be normally distributed:
+
+```{r warning = FALSE, message = FALSE}
+target_var <- student_data$Exam_Score
+model <- lm(target_var ~ ., data = vars_subset_enc)
+model_res <- data.frame(residuals = model$residuals)
+ggplot(data = model_res, mapping = aes(x = residuals)) +
+  geom_histogram(fill = "steelblue") +
+  labs(title = "Histogram of Residuals", x = "Residuals", y = "Frequency", caption = "Figure 8. Histogram of distribution of residuals from linear regression model.") +
+  theme_minimal() +
+  scale_x_continuous(limits = c(-5, 30)) +
+  theme(plot.caption = element_text(hjust = 0))
+```
+
+As seen on the residuals plot above, the residuals are roughly normal and centered around 0, with some outliers on the right side.
+
+Furthermore, the variance of residuals should be constant across fitted values (homoscedasticity test):
+
+```{r}
+ggplot(mapping = aes(x = model$fitted.values, y = model$residuals)) + 
+  geom_point(size = 2.5) +
+  geom_hline(yintercept = 0, color = "steelblue") + 
+  labs(title = "Residuals vs Fitted Values", x = "Fitted Values", y = "Residuals", caption = "Figure 9. Scatter plot of residuals against fitted values from linear regression model.") +
+  scale_x_continuous(limits = c(50, 90)) +
+  theme_minimal() +
+  theme(plot.caption = element_text(hjust = 0))
+```
+
+As shown on the plot above, the residuals are mostly randomly scattered around 0 with no discernible pattern. There are, however, a few residuals that are higher than the others (similar to the last plot).
+
+#### Model Validation
+
+Moving onto validation of the mode, first, `Exam_Score` is added back into the dataset and renamed for easier reference.
+```{r}
+vars_subset_enc <- cbind(vars_subset_enc, student_data$Exam_Score)
+vars_subset_enc <- vars_subset_enc %>% rename("Exam_Score" = "student_data$Exam_Score")
+datatable(head(vars_subset_enc, 5), options = list(scrollX = TRUE, searching = FALSE, paging = FALSE), caption = "Table 16. Head of dataset after adding back Exam_Score.")
+```
+
+Then, the dataset is split into training and testing sets, so that performance can be assessed.
+```{r}
+set.seed(21)
+split_index <- createDataPartition(student_data$Exam_Score, p = 0.8, list = FALSE)
+
+train_data <- vars_subset_enc[split_index, ]
+test_data <- vars_subset_enc[-split_index, ]
+```
+
+And then the model is fitted using the training dataset.
+```{r}
+model_train <- lm(Exam_Score ~ ., data = train_data)
+summary(model_train)
+```
+
+Looking at how the model performed on just the training data, almost all of the variables are significant except for `Sleep_Hours` and `School_Type`. The adjusted $R^2$ is 0.641, revealing that about 64% of the variability of `Exam_Score` can be explained by the explanatory variables in the dataset. 
+
+Then, this model is used to generate predictions on the test dataset.
+```{r}
+test_predictions <- predict(model_train, newdata = test_data)
+```
+
+Now, the model's performance can be evaluated:
+```{r}
+actual <- test_data$Exam_Score
+predicted <- test_predictions
+rmse_value <- rmse(actual, predicted)
+r_squared <- cor(actual, predicted)^2
+
+cat("RMSE:", rmse_value, "\n")
+cat("R-squared:", r_squared, "\n")
+```
+
+As seen above, the root mean squared error (RMSE) is 2.13 and the $R^2$ value is 0.670. To assess how the RMSE value compares to the variability of `Exam_Score`, the standard deviation of the variable needs to be calculated:
+```{r}
+sd(vars_subset_enc$Exam_Score)
+```
+
+Comparing the two, the RMSE is lower than the standard deviation of `Exam_Score` overall, and reveals that on average, the predicted `Exam_Score` is only off by 2.13 points from the actual score. Furthermore, the $R^2$ value shows that about 67% of the variability in `Exam_Score` can be explained by the model, which indicates a moderately strong fit.
+
+Visualizing the actual values vs the predicted values for the test dataset:
+```{r}
+ggplot(mapping = aes(x = actual, y = predicted)) +
+  geom_point() +
+  labs(title = "Actual vs Predicted Values for Test Data", x = "Actual", y = "Predicted", caption = "Figure 10. Scatter plot of predicted values vs actual values of test dataset.") +
+  theme_minimal() +
+  theme(plot.caption = element_text(hjust = 0))
+```
+
+The actual and predicted values line up in a pretty linear fashion for most of the scores in the dataset. However, interestingly, when the actual score is on the higher end of the range (80+), the predictions are a lot lower (in the 65-75 range). Overall, this model is a relatively good fit for the data, with a few exceptions in the higher score range for `Exam_Score`. 
+
+#### Results and Interpretation
+
+Now that the model has been run and validated, with assumptions checked, the results can be interpreted:
+```{r}
+summary(model)
+```
+
+As mentioned above, 2 of the 12 explanatory variables are not significant in this model: `Sleep_Hours` and `School_Type`. The rest, however, are highly significant. In this model, the adjusted $R^2$ value is 0.6465, showing that the model captures about 65% of the variability in `Exam_Score`.
+
+However, since two variables are not playing a significant role in `Exam_Score` values, another model can be fitted without those two:
+```{r}
+vars_subset_enc_2 <- vars_subset_enc %>% select(-c(School_Type, Sleep_Hours))
+model_1 <- lm(Exam_Score ~ ., data = vars_subset_enc_2)
+summary(model_1)
+```
+
+Looking at the summary of this new model, all of the variables left in the dataset are significant. However, the adjusted $R^2$ value did not increase by much, moving up to 0.6466. Overall, this model also explains about 65% of the variability in `Exam_Score`.
+
+With this model, the importance of all of the explanatory variables can also be examined:
+```{r}
+coef_df <- broom::tidy(model_1) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(abs_estimate = abs(estimate))
+
+ggplot(coef_df, aes(x = reorder(term, abs_estimate), y = estimate)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Explanatory Variable Importance (Coefficients)", x = "Predictor Variables", y = "Coefficient Estimate", caption = "Figure 11. Coefficients from linear regression model of 10 identified explanatory variables.") +
+  theme_minimal() +
+  theme(plot.caption = element_text(hjust = 0))
+```
+
+As shown in the plot above, the three variables that seem to be the most important in this model are `Access_to_Resources`, `Parental_Involvement`, and `Learning_Disabilities`. Specifically, more access to resources, more parental involvement, and no learning disabilities are seem to be important to having higher exam scores.
+
+Interestingly, hours studied and attendance seem to be the least important, specifically for this linear regression model, which contrasts the fact that they had the highest correlation with `Exam_Score`, as seen in the EDA. 
+
+## Conclusion
+
+### Discussion
+
+With exams being a big and critical part of education from high school all the way through postgraduate studies, many students face a wide range of situations that have the potential to affect their academic performance throughout their time in school. This project aimed to analyze a dataset consisting of various possible explanatory variables and a response variable of exam score to determine a subset of factors that play a significant role in student exam performance and the extent to which they impact scores and could be used to predict outcomes. 
+
+While principal component analysis (PCA) focused only on numerical variables, carrying out factorial analysis of mixed data (FAMD) allowed for highlighting some of both numerical and categorical variables that have high correlations with exam scores. FAMD revealed a few of the highly contributing factors such as hours studied, attendance, learning disabilities, and parental involvement, to name a few. 
+
+Using the 12 variables identified from FAMD in a linear regression model, the significance of these explanatory variables came to light. More specifically, two of the variables were not significant at all: sleep hours and type of school. After constructing and fitting another model without those two variables, all ten of the remaining factors were significant.
+
+The explanatory variables that play a significant role in student exam scores are: hours studied, attendance, parental involvement, access to resources, motivation level, family income, peer influence, learning disabilities, parental education level, and distance from home. Some of these variables were expected—such as attendance and access to resources—but some were not as clear at the beginning of the project, such as distance from home. The linear regression model ended up with an $R^2$ value of 0.6466, meaning 65% of the variability in exam scores could be explained by these 10 variables. This means that this model is a moderately strong fit for this data; however, it could be improved.
+
+Furthermore, the importance of each of the explanatory variables was also analyzed. Looking at the estimated coefficients of each variable, it was identified that the three most important variables in this model are access to resources, parental involvement, and learning disabilities. This is interesting because the two variables that had the highest correlation with exam scores—attendance and hours studied—had far smaller coefficients than these three. In addition, it's fascinating that these three factors are all external; more specifically, they represent situations over which a student has no meaningful control over, as opposed to internal factors such as hours studied or motivation level. These results reveal that although internal factors that the student themselves can control do play a significant role in exam scores, some of the more important factors come from external sources that the student is simply a bystander to. 
+
+In terms of what this means for schools and educators, it is clear that the external factors of a student's situation play a considerable role in academic performance. Therefore, in order to help improve student test scores, schools might need to develop plans to combat or lessen the external stressors. For example, creating improved tools and curriculums for students with learning disabilities—as having one has a negative relationship with exam scores—might possibly aid those with learning disabilities to increase their scores and perform better in the long run. Although it is virtually impossible to eliminate every potential factor that negatively impacts exam scores, educational institutions could adapt their methods and support systems in order to provide targeted assistance for the students that need it.
+
+### Limitations and Future Steps
+
+One of the major limitations of this study is that this was synthetic data; therefore, it does not represent real students. Although it simulates a wide range of possible situations and factors, it is still manufactured data and might not capture all of the realistic nature of actual students and their situations. Similarly, this study might not be fully generalizable to all students because of its synthetic nature.
+
+Another limitation of this study is that is only focuses on exam scores as a metric of academic performance. However, there are a multitude of ways academic performance can be measured, so limiting performance to only exams hinders a true analysis of how students are impacted by various factors in their educational careers. In addition, this analysis only looks at possible correlations between variables, not causal relationships. Therefore, it is not possible to state that any of these explanatory variables are guaranteed to always play a critical role in academic performance.
+
+For future research, this study should be replicated with real student data. This would allow for analyzing the impact of these factors in a non-manufactured setting. Furthermore, additional variables should be added to this analysis. Specifically, another cohort of factors—psychological factors such as stress levels and self-esteem—should be added in order to enhance the model and study.
+
+Addressing the limitation of restricting academic performance to only exam scores, future work should broaden the measures of academic success. This could mean examining metrics such as overall academic achievement, post-graduation success, and well-being, which would all lend to providing a more holistic view of student academic performance. Finally, future research should utilize more advanced modeling through machine learning that could reveal valuable insights not found by a simple multiple linear regression model. These more advanced methods could lead to discovering patterns and non-linear relationships not captured in this present study.
+
+## References
+
+Since this was synthetically created data, there was no paper that went along with this dataset. However, this is a topic that has been examined before, and there are a variety of papers that have researched factors that affect academic performance before:
+
+[1] Beckham, N. R., Akeh, L. J., Mitaart, G. N. P., & Moniaga, J. V. (2023). Determining factors that affect student performance using various machine learning methods. In Procedia Computer Science (Vol. 216, pp. 597–603). Elsevier BV. https://doi.org/10.1016/j.procs.2022.12.174
+
+- Two of their most significant factors that were found that affected academic performance were mother's education (positive correlation) and past academic failures (negative correlation).
+
+[2] Doğanlı, B. & Çelik, S. (2021). Statistical Analysis of the Factors Affecting Student Exam Success.
+Journal of Current Researches on Educational Studies, 11 (1), 1-16. https://www.jocures.com/dergi/statistical-analysis-of-the-factors-affecting-student-exam-success20221027112528.pdf
+
+- Some of the significant determinants of academic performance found in this study included regular nutrition, gender, education level of parents, and ethnicity.
+
+[3] Kaviyarasi, R., & Balasubramanian, T. (2018). Exploring the High Potential Factors that Affects Students’ Academic Performance. In International Journal of Education and Management Engineering (Vol. 8, Issue 6, pp. 15–23). MECS Publisher. https://doi.org/10.5815/ijeme.2018.06.02
+
+- Through feature selection, this study found a few main factors that contribute to academic performance: extracurricular activities, guidance, learning disabilities, commute time, and family size.
+
+[4] Yahya, Khaled, Osman, A., & Osman. (2016). Factors influencing academic achievement of undergraduate computing students. International Journal of Computer Applications, 146(3), 23–28. https://doi.org/10.5120/ijca2016910658
+
+- Found 21 statistically significant factors that affected student academic performance that could be grouped into four groups: personal, academic, family, and lifestyle.
